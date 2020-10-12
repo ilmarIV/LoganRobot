@@ -1,0 +1,52 @@
+import numpy as np
+from functools import partial
+import cv2
+import time
+
+def getValues():
+    
+    def updateValues(lst, index, value):
+        lst[index] = value
+        return
+    
+    choice = input("(0 - ball, 1 - basket1, 2 - basket2): ")
+    file = open("values.txt", "r+")
+    lines = file.readlines()
+    data = lines[int(choice)].strip()
+    data = [x.split() for x in data]
+    print(data)
+    lower_limits = np.asarray([int(x) for x in data[1:4]])
+    upper_limits = np.asarray([int(x) for x in data[4:]])
+
+    cv2.namedWindow("original")
+    cv2.namedWindow("processed")
+    
+    cv2.createTrackbar("h_low", "original", int(data[1]), 255, partial(updateValues, lower_limits, 0))
+    cv2.createTrackbar("s_low", "original", int(data[2]), 255, partial(updateValues, lower_limits, 1))
+    cv2.createTrackbar("v_low", "original", int(data[3]), 255, partial(updateValues, lower_limits, 2))
+    cv2.createTrackbar("h_high", "original", int(data[4]), 255, partial(updateValues, upper_limits, 0))
+    cv2.createTrackbar("s_high", "original", int(data[5]), 255, partial(updateValues, upper_limits, 1))
+    cv2.createTrackbar("v_high", "original", int(data[6]), 255, partial(updateValues, upper_limits, 2))
+    
+    cap = cv2.VideoCapture(0)
+    
+    while True:
+        _, frame = cap.read()
+        thresholded = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        thresholded = cv2.inRange(thresholded, lower_limits, upper_limits)
+        
+        cv2.imshow("original", frame)
+        cv2.imshow("processed", thresholded)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    
+    file.writelines(lines)
+    file.close()
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    getValues()
+
