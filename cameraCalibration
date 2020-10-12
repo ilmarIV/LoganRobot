@@ -10,11 +10,9 @@ def getValues():
         return
     
     choice = input("(0 - ball, 1 - basket1, 2 - basket2): ")
-    file = open("values.txt", "r+")
-    lines = file.readlines()
-    data = lines[int(choice)].strip()
-    data = [x.split() for x in data]
-    print(data)
+    with open("values.txt", "r") as file:
+        lines = file.readlines()
+        data = lines[int(choice)].split()
     lower_limits = np.asarray([int(x) for x in data[1:4]])
     upper_limits = np.asarray([int(x) for x in data[4:]])
 
@@ -41,9 +39,9 @@ def getValues():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    
-    file.writelines(lines)
-    file.close()
+    with open("values.txt", "w") as file:
+        lines[int(choice)] = data[0] + " " + str(lower_limits[0]) + " " + str(lower_limits[1]) + " " + str(lower_limits[2]) + " " + str(upper_limits[0]) + " " + str(upper_limits[1]) + " " + str(upper_limits[2]) + "\n"
+        file.writelines(lines)
     cap.release()
     cv2.destroyAllWindows()
 
