@@ -12,8 +12,12 @@ def getValues():
     with open("values.txt", "r") as file:
         lines = file.readlines()
         data = lines[int(choice)].split()
+        kernel_size = int(lines[3].split()[1])
+        
     lower_limits = np.asarray([int(x) for x in data[1:4]])
     upper_limits = np.asarray([int(x) for x in data[4:]])
+
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
     cv2.namedWindow("original")
     cv2.namedWindow("processed")
@@ -29,11 +33,12 @@ def getValues():
     
     while True:
         _, frame = cap.read()
-        thresholded = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        thresholded = cv2.inRange(thresholded, lower_limits, upper_limits)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        thresholded = cv2.inRange(hsv, lower_limits, upper_limits)
+        closing = cv2.morphologyEx(thresholded, cv2.MORPH_CLOSE, kernel)
         
         cv2.imshow("original", frame)
-        cv2.imshow("processed", thresholded)
+        cv2.imshow("processed", closing)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
