@@ -23,10 +23,10 @@ def loop():
         
         mainboardMSG(speed+change, 0, speed-change)
         
-    def turnRight():
+    def turnRight(turn_speed):
         mainboardMSG(turn_speed, 0, -turn_speed)
     
-    def turnToBasket():
+    def turnToBasket(turn_speed):
         if basket_x < 320:
             mainboardMSG(turn_speed, 0, -turn_speed)
         else:
@@ -169,7 +169,17 @@ def loop():
     while running:
         if have_ball:
             if see_basket:
-                if 
+                if abs(basket_x - 320) < 4:
+                    throw()
+                else:
+                    turnToBasket(turn_speed)
+            else:
+                turnRight(turn_speed)
+        else:
+            if see_ball:
+                driveToBall()
+            else:
+                turnRight(turn_speed)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
             running = False
