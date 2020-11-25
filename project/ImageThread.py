@@ -2,8 +2,7 @@ import cv2
 import pyrealsense2 as rs
 import numpy as np
 
-from main import running
-from variables import *
+from Main import running
 
 choice = int(input("(1 - pink basket, 2 - blue basket): "))
 
@@ -51,10 +50,17 @@ cv2.namedWindow("original")
 cv2.namedWindow("ball_image")
 cv2.namedWindow("basket_image")
 
+basket_x = None
+basket_dist = None
+ball_x = None
+see_basket = False
+see_ball = False
+
 #thread for getting image data
 def imageThread():
     global basket_x
     global basket_dist
+    global ball_x
     global see_basket
     global see_ball
 

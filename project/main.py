@@ -1,7 +1,10 @@
 from threading import Thread
+import cv2
 
-from DrivingCommands import *
-from ImageThread import *
+from DrivingCommands import turnRight, driveToBall, turnToBasket, throw
+from ImageThread import imageThread, see_ball, see_basket, basket_x
+
+have_ball = False
 
 running = True
 Thread(name="imageThread", target=imageThread).start()
