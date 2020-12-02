@@ -1,10 +1,9 @@
 import cv2
 import pyrealsense2 as rs
 import numpy as np
-
-#from Main import running
-
-running = True
+import time
+from serial import Serial
+from threading import Thread
 
 choice = int(input("(1 - pink basket, 2 - blue basket): "))
 
@@ -23,8 +22,8 @@ kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
-config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
+config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
 pipeline.start(config)
 
 blobparams_ball = cv2.SimpleBlobDetector_Params()
@@ -48,23 +47,43 @@ blobparams_basket.filterByInertia = False
 ball_detector = cv2.SimpleBlobDetector_create(blobparams_ball)
 basket_detector = cv2.SimpleBlobDetector_create(blobparams_basket)
 
-basket_x = None
-basket_dist = None
-ball_x = None
-see_basket = False
-see_ball = False
+turn_speed = 20
+speed = 40
 
+Ku = 1
+Tu = 1
+
+Kp = 0.6 * Ku
+Ki = (1.2 * Ku) / Tu
+Kd = (3 * Ku * Tu) / 40
+
+seconds = time.time()
+integral = 0
+last_error = 0
+
+ser = Serial('/dev/ttyACM0', baudrate=115200, timeout=1)
+
+cv2.namedWindow("original")
+cv2.namedWindow("ball_image")
+cv2.namedWindow("basket_image")
+
+have_ball = False
+see_ball = False
 color_image = None
 ball_morph = None
 basket_morph = None
 
-#thread for getting image data
+running = True
+
 def imageThread():
     global basket_x
     global basket_dist
     global ball_x
     global see_basket
     global see_ball
+    global color_image
+    global ball_morph
+    global basket_morph
 
     while running:
         frames = pipeline.wait_for_frames()
@@ -111,6 +130,67 @@ def imageThread():
                     basket_y = int(basket_keypoint.pt[1])
 
                     basket_dist = depth_frame.get_distance(basket_x, basket_y)
-                    #print(basket_dist)
 
-    cv2.destroyAllWindows()
+            cv2.imshow("original", color_image)
+            cv2.imshow("ball_image", ball_morph)
+            cv2.imshow("basket_image", basket_morph)
+
+def mainboardMSG(speed_1, speed_2, speed_3):
+    msg = "sd:" + str(speed_1) + ":" + str(speed_2) + ":" + str(speed_3) + "\r\n"
+    ser.write(msg.encode('UTF-8'))
+    while ser.inWaiting() > 0:
+        ser.read()
+
+def driveToBall():
+    global seconds
+    global integral
+    global last_error
+
+    dt = time.time() - seconds
+    seconds = time.time()
+    error = 320 - ball_x
+    integral = integral + error * dt
+    deriative = (error - last_error) / dt
+    change = int(Kp * error + Ki * integral + Kd * deriative)
+    last_error = error
+
+    mainboardMSG(speed + change, 0, speed - change)
+
+
+def turnRight():
+    mainboardMSG(turn_speed, 0, -turn_speed)
+
+
+def turnToBasket():
+    if basket_x < 320:
+        mainboardMSG(turn_speed, 0, -turn_speed)
+    else:
+        mainboardMSG(-turn_speed, 0, turn_speed)
+
+
+def throw():
+    print(basket_dist)
+
+Thread(name="imageThread", target=imageThread).start()
+
+print("f")
+
+while running:
+    if have_ball:
+        if see_basket:
+            if abs(basket_x - 320) < 4:
+                throw()
+            else:
+                turnToBasket()
+        else:
+            turnRight()
+    else:
+        if see_ball:
+            driveToBall()
+        else:
+            turnRight()
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        imageThread().join()
+        running = False
+
