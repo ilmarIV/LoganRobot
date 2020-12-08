@@ -77,7 +77,7 @@ def findNearest(keypoints):
         if keypoint.pt[1] > nearest_y:
             nearest_y = keypoint.pt[1]
             nearest_x = keypoint.pt[0]
-            nearest_size = keypoint.pt[2]
+            nearest_size = keypoint.size
 
     return nearest_x, nearest_y, nearest_size
 
@@ -156,9 +156,7 @@ mbt.start()
 
 
 while True:
-    k = cv2.waitKey(1) & 0xFF
-    # press 'q' to exit
-    if k == ord('q'):
+    if cv2.waitKey(1) & 0xF == ord('q'):
         break
 
     frames = getFrames(pipeline)
