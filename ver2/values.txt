@@ -1,0 +1,4 @@
+ball 8 16 62 68 255 219
+pink_basket 167 145 118 246 255 255
+blue_basket 101 255 61 114 255 161
+kernel 5

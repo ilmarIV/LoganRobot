@@ -1,14 +1,15 @@
 import numpy as np
 from functools import partial
 import cv2
+import pyrealsense2 as rs
 
-def getValues():
+def GetValues():
     
     def updateValues(lst, index, value):
         lst[index] = value
         return
     
-    choice = input("(0 - ball, 1 - basket1, 2 - basket2): ")
+    choice = input("(0 - ball, 1 - pink basket, 2 - blue basket): ")
     with open("values.txt", "r") as file:
         lines = file.readlines()
         data = lines[int(choice)].split()
@@ -28,17 +29,24 @@ def getValues():
     cv2.createTrackbar("h_high", "original", int(data[4]), 255, partial(updateValues, upper_limits, 0))
     cv2.createTrackbar("s_high", "original", int(data[5]), 255, partial(updateValues, upper_limits, 1))
     cv2.createTrackbar("v_high", "original", int(data[6]), 255, partial(updateValues, upper_limits, 2))
-    
-    cap = cv2.VideoCapture(0)
+
+    pipeline = rs.pipeline()
+    config = rs.config()
+    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+    pipeline.start(config)
     
     while True:
-        _, frame = cap.read()
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        thresholded = cv2.inRange(hsv, lower_limits, upper_limits)
-        closing = cv2.morphologyEx(thresholded, cv2.MORPH_CLOSE, kernel)
-        
-        cv2.imshow("original", frame)
-        cv2.imshow("processed", closing)
+        frames = pipeline.wait_for_frames()
+        if frames:
+            color_frame = frames.get_color_frame()
+            color_array = np.asanyarray(color_frame.get_data())
+            hsv = cv2.cvtColor(color_array, cv2.COLOR_BGR2HSV)
+            thresholded = cv2.inRange(hsv, lower_limits, upper_limits)
+            closing = cv2.morphologyEx(thresholded, cv2.MORPH_CLOSE, kernel)
+
+            cv2.imshow("original", color_array)
+            cv2.imshow("processed", closing)
         
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -46,8 +54,8 @@ def getValues():
     with open("values.txt", "w") as file:
         lines[int(choice)] = data[0] + " " + str(lower_limits[0]) + " " + str(lower_limits[1]) + " " + str(lower_limits[2]) + " " + str(upper_limits[0]) + " " + str(upper_limits[1]) + " " + str(upper_limits[2]) + "\n"
         file.writelines(lines)
-    cap.release()
+    pipeline.stop()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    getValues()
+    GetValues()

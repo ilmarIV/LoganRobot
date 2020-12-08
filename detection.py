@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 def loop():
-    with open("project/values.txt", "r") as file:
+    with open("ver2/values.txt", "r") as file:
         lines = file.readlines()
         
         ball_lower = np.asarray([int(x) for x in lines[0].split()[1:4]])
