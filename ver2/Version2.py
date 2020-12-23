@@ -22,20 +22,25 @@ with open("values.txt", "r") as file:
 KERNEL = np.ones((kernel_size, kernel_size), np.uint8)
 
 
-def sendMainboard(ser, freq, speeds_queue):
-    seconds = time.time()
+def sendMainboard(ser, speeds_queue, throws_queue):
     while True:
+        if not throws_queue.empty():
+            throws = throws_queue.get()
+            throw_msg = "d:" + str(throws) + "\r\n"
+            ser.write(throw_msg.encode('UTF-8'))
+            time.sleep(0.2)
+            print("viskas###############################################")
+
         if not speeds_queue.empty():
             speeds = speeds_queue.get()
 
-            if time.time() >= seconds + freq:
-                seconds = time.time()
+            speed_msg = "sd:" + str(speeds[0]) + ":" + str(speeds[1]) + ":" + str(speeds[2]) + "\r\n"
 
-                msg = "sd:" + str(speeds[0]) + ":" + str(speeds[1]) + ":" + str(speeds[2]) + "\r\n"
-                ser.write(msg.encode('UTF-8'))
+            ser.write(speed_msg.encode('UTF-8'))
+            time.sleep(0.02)
 
-                while ser.inWaiting() > 0:
-                    ser.read()
+            while ser.inWaiting() > 0:
+                ser.read()
 
 
 def getFrames(pipeline):
@@ -83,31 +88,49 @@ def findNearest(keypoints):
 
 
 def driveToBall(queue, ball_x):
-    if abs(ball_x - 320) < 10:
-        queue.put([20, -20, 0])
+    if abs(ball_x - 320) < 20:
+        #queue.put([7, 0, -7])
+        queue.put([0, 0, 0])
     else:
         if ball_x < 320:
-            queue.put([10, 30, 0])
+            #queue.put([5, 0, -10])
+            queue.put([0, 0, 0])
         else:
-            queue.put([30, 10, 0])
+            #queue.put([10, 0, -5])
+            queue.put([0, 0, 0])
     return
 
 
 def turnToBasket(queue, basket_x):
     if basket_x < 320:
-        queue.put([20, 20, 20])
+        #queue.put([5, 5, 5])
+        queue.put([0, -5, 0])
     else:
-        queue.put([-20, -20, -20])
+        #queue.put([-5, -5, -5])
+        queue.put([0, 5, 0])
     return
 
 
 def turnRight(queue):
-    queue.put([20, 20, 20])
+    #queue.put([5, 5, 5])
+    queue.put([0, 0, 0])
     return
 
+def turnAroundBall(queue):
+    #queue.put([5, 5, 5])
+    queue.put([0, 5, 0])
+    return
 
-def throw():
-    print("should be throwing")
+def throw(throw_queue, speeds_queue, basket_dist):
+    start = time.time()
+    while time.time() - start <= 1:
+        throw_queue.put(200)
+        speeds_queue.put([5, 0, -5])
+
+    while not throw_queue.empty():
+        throws_queue.get()
+    throws_queue.put(100)
+
     return
 
 
@@ -122,9 +145,9 @@ blobparams_ball.filterByInertia = False
 
 blobparams_basket = cv2.SimpleBlobDetector_Params()
 blobparams_basket.filterByArea = True
-blobparams_basket.minArea = 500
-blobparams_basket.maxArea = 10000
-blobparams_baske=filterByCircularity = False
+blobparams_basket.minArea = 5
+blobparams_basket.maxArea = 1000000
+blobparams_basket.filterByCircularity = False
 blobparams_basket.filterByConvexity = False
 blobparams_basket.filterByColor = False
 blobparams_basket.filterByInertia = False
@@ -141,9 +164,10 @@ pipeline.start(config)
 have_ball = False
 
 ser = Serial('/dev/ttyACM0', baudrate=115200, timeout=1)
-freq = 0.5
 speeds_queue = queue.Queue()
-mbt = Thread(target=sendMainboard, name="mbt", args=(ser, freq, speeds_queue))
+throws_queue = queue.Queue()
+
+mbt = Thread(target=sendMainboard, name="mbt", args=(ser, speeds_queue, throws_queue))
 
 cv2.namedWindow("original")
 
@@ -156,8 +180,6 @@ mbt.start()
 
 
 while True:
-    if cv2.waitKey(1) & 0xF == ord('q'):
-        break
 
     frames = getFrames(pipeline)
     if frames:
@@ -170,17 +192,18 @@ while True:
             if basket_kp:
                 basket_x, basket_y = basket_kp[0].pt[0], basket_kp[0].pt[1]
                 basket_dist = depth_frame.get_distance(int(basket_x), int(basket_y))
-                print("test")
 
-                if abs(basket_x - 320) < 4:
-                    throw()
+                if abs(basket_x - 320) < 15:
+                    throw(throws_queue, speeds_queue, basket_dist)
                     have_ball = False
 
                 else:
                     turnToBasket(speeds_queue, basket_x)
+                    print("keera korvini")
 
             else:
-                turnRight(speeds_queue)
+                turnAroundBall(speeds_queue)
+                print("paremale")
 
         else:
             draw_image, ball_img = getBallImage(frames)
@@ -190,20 +213,24 @@ while True:
             if ball_kp:
                 ball_x, ball_y, ball_size = findNearest(ball_kp)
 
-                #print(ball_y, ball_size)
-
                 if ball_y > 420 and ball_size > 40:
                     have_ball = True
+                    print("have ball läks true")
 
                 else:
                     driveToBall(speeds_queue, ball_x)
+                    print("sõida pallini")
 
             else:
                 turnRight(speeds_queue)
+                print("paremale")
 
         draw_image = cv2.drawKeypoints(draw_image, ball_kp, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         draw_image = cv2.drawKeypoints(draw_image, basket_kp, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         cv2.imshow("original", draw_image)
+
+    if (cv2.waitKey(1) & 0xFF) == ord('q'):
+        break
 
 cv2.destroyAllWindows()
 pipeline.stop()

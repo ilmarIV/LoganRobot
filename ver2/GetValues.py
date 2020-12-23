@@ -48,7 +48,7 @@ def GetValues():
             cv2.imshow("original", color_array)
             cv2.imshow("processed", closing)
         
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if (cv2.waitKey(1) & 0xFF) == ord('q'):
             break
 
     with open("values.txt", "w") as file:
