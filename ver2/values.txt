@@ -1,4 +1,4 @@
-ball 10 0 0 68 255 191
+ball 10 61 85 134 193 192
 pink_basket 156 173 157 187 244 204
 blue_basket 95 55 55 159 109 151
 kernel 5

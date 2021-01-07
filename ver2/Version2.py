@@ -216,12 +216,12 @@ while True:
                 basket_x, basket_y = basket_kp[0].pt[0], basket_kp[0].pt[1]
                 basket_dist = depth_frame.get_distance(int(basket_x), int(basket_y))
 
-                if abs(basket_x - 320) < 10:
+                if abs(basket_x - 280) < 10:
                     throw(throws_queue, speeds_queue, basket_dist)
                     #print("uuele ringile")
                     have_ball = False
 
-                elif abs(basket_x - 320) < 50:
+                elif abs(basket_x - 280) < 50:
                     turnAroundBallSlow(speeds_queue)
                    # print("keera korvini")
 
@@ -241,11 +241,11 @@ while True:
             if ball_kp:
                 ball_x, ball_y, ball_size = findNearest(ball_kp)
 
-                if ball_y > 415 and ball_size > 40:
+                if ball_y > 400 and ball_size > 40:
                     have_ball = True
                     #print("have ball läks true")
 
-                elif ball_y > 360:
+                elif ball_y > 350:
                     driveToBallSlow(speeds_queue, ball_x)
                     # print("sõida pallini")
 
