@@ -107,34 +107,52 @@ def turnRight(queue, turn_speed):
     return
 
 
-
-def turnToBasket(queue, basket_x):
-    if basket_x < 320:
-        queue.put([20, 20, 20])
-        #queue.put([0, -5, 0])
+def turnAroundBallRight(queue, ball_x, turn_speed, compensate, sideways):
+    #print("otsin korvi")
+    if abs(ball_x - 320) < 5:
+        queue.put(turn_speed)
+    elif ball_x < 320:
+        queue.put(sideways)
+        #queue.put([-5, 20, -5])
     else:
-        queue.put([-20, -20, -20])
-        #queue.put([0, 5, 0])
+        queue.put(compensate)
+        #queue.put([10, 10, 10])
+
     return
 
 
-def turnAroundBallSlow(queue):
-    #queue.put([5, 5, 5])
-    queue.put([0, 15, 0])
-    return
+def turnAroundBall(queue, ball_x, basket_x, right_turn, left_turn, compensate_right, compensate_left, sideways_right, sideways_left):
+    if basket_x < 320:
+       # print("vasakule")
 
+        if abs(ball_x - 320) < 5:
+            queue.put(left_turn)
+        elif ball_x < 320:
+            #queue.put([-10, -10, -10])
+            queue.put(compensate_left)
+        else:
+            #queue.put([5, -20, 5])
+            queue.put(sideways_left)
+    else:
+       # print("paremale")
 
-def turnAroundBallFast(queue):
-    #queue.put([5, 5, 5])
-    queue.put([0, 20, 0])
+        if abs(ball_x - 320) < 5:
+            queue.put(right_turn)
+        elif ball_x < 320:
+            #queue.put([-5, 20, -5])
+            queue.put(sideways_right)
+        else:
+            #queue.put([10, 10, 10])
+            queue.put(compensate_right)
+
     return
 
 
 def throw(throw_queue, speeds_queue, basket_dist):
     start = time.time()
-    while time.time() - start <= 0.5:
-        throw_queue.put(230)
-        speeds_queue.put([35, 0, -35])
+    while time.time() - start <= 0.7:
+        throw_queue.put(250)
+        speeds_queue.put([25, 0, -25])
 
     while not throw_queue.empty():
         throws_queue.get()
@@ -201,12 +219,30 @@ right_slow = [20, 0, -10]
 left_slow = [10, 0, -20]
 
 #fast driving speeds
-forward_fast = [30, 0, -30]
-right_fast = [45, 0, -30]
-left_fast = [30, 0, -45]
+forward_fast = [50, 0, -50]
+right_fast = [60, 0, -40]
+left_fast = [40, 0, -60]
 
 #turn right speed
 right_turn = [20, 20, 20]
+
+#tuen around ball
+around_right_slow = [0, 20, 0]
+around_right_fast = [0, 40, 0]
+
+around_left_slow = [0, -20, 0]
+around_left_fast = [0, -40, 0]
+
+compensate_left_slow = [-5, -5, -5]
+compensate_left_fast = [-15, -15, -15]
+compensate_right_slow = [5, 5, 5]
+compensate_right_fast = [15, 15, 15]
+
+sideways_left_slow = [8, -25, 8]
+sideways_left_fast = [10, -40, 10]
+sideways_right_slow = [-8, 25, -8]
+sideways_right_fast = [-10, 40, -10]
+
 
 while True:
 
@@ -226,30 +262,39 @@ while True:
 
         if have_ball:
 
-            if basket_kp:
-                basket_x, basket_y = basket_kp[0].pt[0], basket_kp[0].pt[1]
-                basket_dist = depth_frame.get_distance(int(basket_x), int(basket_y))
+            if ball_kp and ball_y > 370:
 
-                if abs(basket_x - 280) < 10:
-                    throw(throws_queue, speeds_queue, basket_dist)
-                    have_ball = False
+                if basket_kp:
+                    basket_x, basket_y = basket_kp[0].pt[0], basket_kp[0].pt[1]
+                    basket_dist = depth_frame.get_distance(int(basket_x), int(basket_y))
 
-                elif abs(basket_x - 280) < 50:
-                    turnAroundBallSlow(speeds_queue)
+                    if abs(basket_x - 320) < 5 and abs(ball_x - 320) < 5:
+                        while not speeds_queue.empty():
+                            speeds_queue.get()
+
+                        throw(throws_queue, speeds_queue, basket_dist)
+                        have_ball = False
+                        #print(basket_x)
+
+                    elif abs(basket_x - 320) < 80:
+                        turnAroundBall(speeds_queue, ball_x, basket_x, around_right_slow, around_left_slow, compensate_right_slow, compensate_left_slow, sideways_right_slow, sideways_left_slow)
+
+                    else:
+                        turnAroundBall(speeds_queue, ball_x, basket_x, around_right_fast, around_left_fast, compensate_right_fast, compensate_left_fast, sideways_right_fast, sideways_left_fast)
 
                 else:
-                    turnAroundBallFast(speeds_queue)
+                    turnAroundBallRight(speeds_queue, ball_x, around_right_fast, compensate_right_fast, sideways_right_fast)
 
             else:
-                turnAroundBallFast(speeds_queue)
+                have_ball = False
 
         else:
             if ball_kp:
 
-                if ball_y > 400 and ball_size > 40:
+                if ball_y > 380 and ball_size > 40:
                     have_ball = True
 
-                elif ball_y > 350:
+                elif ball_y > 340:
                     driveToBall(speeds_queue, ball_x, forward_slow, right_slow, left_slow)
 
                 else:
