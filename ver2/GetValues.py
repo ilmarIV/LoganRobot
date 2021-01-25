@@ -13,7 +13,10 @@ def GetValues():
     with open("values.txt", "r") as file:
         lines = file.readlines()
         data = lines[int(choice)].split()
-        kernel_size = int(lines[3].split()[1])
+        if int(choice) == 0:
+            kernel_size = int(lines[3].split()[1])
+        else:
+            kernel_size = int(lines[4].split()[1])
         
     lower_limits = np.asarray([int(x) for x in data[1:4]])
     upper_limits = np.asarray([int(x) for x in data[4:]])
@@ -21,6 +24,7 @@ def GetValues():
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
     cv2.namedWindow("original")
+    cv2.namedWindow("hsv")
     cv2.namedWindow("processed")
     
     cv2.createTrackbar("h_low", "original", int(data[1]), 255, partial(updateValues, lower_limits, 0))
@@ -31,11 +35,27 @@ def GetValues():
     cv2.createTrackbar("v_high", "original", int(data[6]), 255, partial(updateValues, upper_limits, 2))
 
     pipeline = rs.pipeline()
+
     config = rs.config()
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-    pipeline.start(config)
-    
+    config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
+
+    profile = pipeline.start(config)
+
+    rgb_sensor = profile.get_device().first_color_sensor()
+    rgb_sensor.set_option(rs.option.enable_auto_exposure, False)
+    rgb_sensor.set_option(rs.option.enable_auto_white_balance, False)
+    rgb_sensor.set_option(rs.option.auto_exposure_priority, False)
+    rgb_sensor.set_option(rs.option.brightness, 0)
+    rgb_sensor.set_option(rs.option.contrast, 50)
+    rgb_sensor.set_option(rs.option.exposure, 166)
+    rgb_sensor.set_option(rs.option.gain, 64)
+    rgb_sensor.set_option(rs.option.gamma, 300)
+    rgb_sensor.set_option(rs.option.hue, 0)
+    rgb_sensor.set_option(rs.option.saturation, 64)
+    rgb_sensor.set_option(rs.option.sharpness, 50)
+    rgb_sensor.set_option(rs.option.white_balance, 4600)
+
     while True:
         frames = pipeline.wait_for_frames()
         if frames:
@@ -46,6 +66,7 @@ def GetValues():
             closing = cv2.morphologyEx(thresholded, cv2.MORPH_CLOSE, kernel)
 
             cv2.imshow("original", color_array)
+            cv2.imshow("hsv", hsv)
             cv2.imshow("processed", closing)
         
         if (cv2.waitKey(1) & 0xFF) == ord('q'):

@@ -17,33 +17,34 @@ with open("values.txt", "r") as file:
     BASKET_LOWER = np.asarray([int(x) for x in lines[choice].split()[1:4]])
     BASKET_UPPER = np.asarray([int(x) for x in lines[choice].split()[4:]])
 
-    kernel_size = int(lines[3].split()[1])
+    ball_kernel_size = int(lines[3].split()[1])
+    basket_kernel_size = int(lines[3].split()[1])
 
-KERNEL = np.ones((kernel_size, kernel_size), np.uint8)
+BALL_KERNEL = np.ones((ball_kernel_size, ball_kernel_size), np.uint8)
+BASKET_KERNEL = np.ones((basket_kernel_size, basket_kernel_size), np.uint8)
 
 
-def sendMainboard(ser, speeds_queue, throws_queue, stop_queue):
+def sendMainboard(ser, speeds_queue, stop_queue):
     while True:
+        #time_start = time.time()
 
         if not stop_queue.empty():
             return
-
-        if not throws_queue.empty():
-            throws = throws_queue.get()
-            throw_msg = "d:" + str(throws) + "\r\n"
-            ser.write(throw_msg.encode('UTF-8'))
-            time.sleep(0.2)
-
-            while ser.inWaiting() > 0:
-                ser.read()
 
         if not speeds_queue.empty():
             speeds = speeds_queue.get()
 
             speed_msg = "sd:" + str(speeds[0]) + ":" + str(speeds[1]) + ":" + str(speeds[2]) + "\r\n"
+            throw_msg = "d:" + str(speeds[3]) + "\r\n"
 
             ser.write(speed_msg.encode('UTF-8'))
-            time.sleep(0.02)
+            time.sleep(0.03)
+
+            #while ser.inWaiting() > 0:
+                #ser.read()
+
+            ser.write(throw_msg.encode('UTF-8'))
+            time.sleep(0.03)
 
             while ser.inWaiting() > 0:
                 ser.read()
@@ -51,6 +52,7 @@ def sendMainboard(ser, speeds_queue, throws_queue, stop_queue):
 
 def getFrames(pipeline):
     frames = pipeline.wait_for_frames()
+
     return frames
 
 
@@ -60,41 +62,64 @@ def getImages(frames):
 
     color_image = np.asanyarray(color_frame.get_data())
     hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
+    gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
 
     thresholded_ball = cv2.inRange(hsv_image, BALL_LOWER, BALL_UPPER)
     thresholded_basket = cv2.inRange(hsv_image, BASKET_LOWER, BASKET_UPPER)
 
-    morph_ball = cv2.morphologyEx(thresholded_ball, cv2.MORPH_CLOSE, KERNEL)
-    morph_basket = cv2.morphologyEx(thresholded_basket, cv2.MORPH_CLOSE, KERNEL)
+    morph_ball = cv2.morphologyEx(thresholded_ball, cv2.MORPH_CLOSE, BALL_KERNEL)
+    morph_basket = cv2.morphologyEx(thresholded_basket, cv2.MORPH_CLOSE, BASKET_KERNEL)
 
-    return color_image, depth_frame, morph_ball, morph_basket
+    return color_image, depth_frame, morph_ball, morph_basket, gray_image
 
 
 def getKeypoints(image, detector):
     keypoints = detector.detect(image)
+
     return keypoints
 
 
-def findNearest(keypoints):
-    nearest_x = keypoints[0].pt[0]
-    nearest_y = keypoints[0].pt[1]
-    nearest_size = keypoints[0].size
+def findNearest(keypoints, gray_img):
+    nearest_x = 0
+    nearest_y = 0
+    nearest_size = 0
 
     for keypoint in keypoints:
-        if keypoint.pt[1] > nearest_y:
-            nearest_y = keypoint.pt[1]
-            nearest_x = keypoint.pt[0]
+        new_x = keypoint.pt[0]
+        new_y = keypoint.pt[1]
+
+        if new_y > nearest_y and checkBounds(gray_img, new_x, new_y):
+            nearest_y = new_y
+            nearest_x = new_x
             nearest_size = keypoint.size
 
     return nearest_x, nearest_y, nearest_size
 
 
+def checkBounds(frame, ball_x, ball_y):
+    #a = [120]
+    if ball_y < 420:
+        for y in range(int(ball_y) + 50, 479, 1):
+            #a.append(frame[y][int(ball_x)])
+
+            if frame[y][int(ball_x)] < 60:
+                return False
+    #print(max(a), min(a))
+    return True
+
+
+def reverse(queue ,speed):
+    queue.put(speed)
+
+    return
+
+
 def driveToBall(queue, ball_x, straight_speed, right_speed, left_speed):
-    if abs(ball_x - 320) < 10:
+    if abs(ball_x - 424) < 10:
         queue.put(straight_speed)
 
     else:
-        if ball_x < 320:
+        if ball_x < 424:
             queue.put(left_speed)
         else:
             queue.put(right_speed)
@@ -104,74 +129,66 @@ def driveToBall(queue, ball_x, straight_speed, right_speed, left_speed):
 
 def turnRight(queue, turn_speed):
     queue.put(turn_speed)
+
     return
 
 
-def turnAroundBallRight(queue, ball_x, turn_speed, compensate, sideways):
-    #print("otsin korvi")
-    if abs(ball_x - 320) < 5:
-        queue.put(turn_speed)
-    elif ball_x < 320:
-        queue.put(sideways)
-        #queue.put([-5, 20, -5])
+def rotateAroundBallRight(queue, ball_x, right_turn, left_turn):
+    if ball_x < 424:
+        queue.put(left_turn)
+
     else:
-        queue.put(compensate)
-        #queue.put([10, 10, 10])
+        queue.put(right_turn)
 
     return
 
 
-def turnAroundBall(queue, ball_x, basket_x, right_turn, left_turn, compensate_right, compensate_left, sideways_right, sideways_left):
-    if basket_x < 320:
-       # print("vasakule")
+def rotateToBasket(queue, ball_x, basket_x, right_right, right_left, left_right, left_left):
+    while not speeds_queue.empty():
+        speeds_queue.get()
 
-        if abs(ball_x - 320) < 5:
-            queue.put(left_turn)
-        elif ball_x < 320:
-            #queue.put([-10, -10, -10])
-            queue.put(compensate_left)
+    if basket_x < 424:
+        if ball_x < 424:
+            queue.put(left_left)
         else:
-            #queue.put([5, -20, 5])
-            queue.put(sideways_left)
+            queue.put(left_right)
+
     else:
-       # print("paremale")
-
-        if abs(ball_x - 320) < 5:
-            queue.put(right_turn)
-        elif ball_x < 320:
-            #queue.put([-5, 20, -5])
-            queue.put(sideways_right)
+        if ball_x < 424:
+            queue.put(right_left)
         else:
-            #queue.put([10, 10, 10])
-            queue.put(compensate_right)
+            queue.put(right_right)
 
     return
 
 
-def throw(throw_queue, speeds_queue, basket_dist):
+def turnAround(queue):
+    print("turning")
+    while not speeds_queue.empty():
+        speeds_queue.get()
+
+    queue.put([140, 140, 140, 900])
+
+    return
+
+
+def throw(speeds_queue, basket_dist, basket_x, ball_x):
+    while not speeds_queue.empty():
+        speeds_queue.get()
+
     start = time.time()
-    while time.time() - start <= 0.7:
-        throw_queue.put(250)
-        speeds_queue.put([25, 0, -25])
-
-    while not throw_queue.empty():
-        throws_queue.get()
-    throws_queue.put(100)
+    while time.time() - start <= 1:
+        speeds_queue.put([17, 0, -17, 1200])   #2m=1278    #1m=1190
 
     while not speeds_queue.empty():
         speeds_queue.get()
-    speeds_queue.put([0, 0, 0])
 
     return
-
-
-def checkBounds(frame, ball_x, ball_y):
-    pass
 
 
 blobparams_ball = cv2.SimpleBlobDetector_Params()
 blobparams_ball.filterByArea = True
-blobparams_ball.minArea = 5
+blobparams_ball.minArea = 3
 blobparams_ball.maxArea = 10000
 blobparams_ball.filterByCircularity = False
 blobparams_ball.filterByConvexity = False
@@ -192,113 +209,162 @@ basket_detector = cv2.SimpleBlobDetector_create(blobparams_basket)
 
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-pipeline.start(config)
+config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 30)
+config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
+
+profile = pipeline.start(config)
+
+rgb_sensor = profile.get_device().first_color_sensor()
+rgb_sensor.set_option(rs.option.enable_auto_exposure, False)
+rgb_sensor.set_option(rs.option.enable_auto_white_balance, False)
+rgb_sensor.set_option(rs.option.auto_exposure_priority, False)
+rgb_sensor.set_option(rs.option.brightness, 0)
+rgb_sensor.set_option(rs.option.contrast, 50)
+rgb_sensor.set_option(rs.option.exposure, 166)
+rgb_sensor.set_option(rs.option.gain, 64)
+rgb_sensor.set_option(rs.option.gamma, 300)
+rgb_sensor.set_option(rs.option.hue, 0)
+rgb_sensor.set_option(rs.option.saturation, 64)
+rgb_sensor.set_option(rs.option.sharpness, 50)
+rgb_sensor.set_option(rs.option.white_balance, 4600)
 
 ser = Serial('/dev/ttyACM0', baudrate=115200, timeout=1)
-speeds_queue = queue.Queue()
-throws_queue = queue.Queue()
+speeds_queue = queue.LifoQueue()
 
 stop_queue = queue.Queue()
 
-mbt = Thread(target=sendMainboard, name="mbt", args=(ser, speeds_queue, throws_queue, stop_queue))
+mbt = Thread(target=sendMainboard, name="mbt", args=(ser, speeds_queue, stop_queue))
 
 have_ball = False
 
 cv2.namedWindow("original")
 cv2.namedWindow("ball")
 cv2.namedWindow("basket")
+cv2.namedWindow("gray")
 
 ball_kp = None
 basket_kp = None
 ball_img = None
 basket_img = None
 
-mbt.start()
+distances = [2, 2, 2, 2]
+
+thrower_stop = 1000
+
+#reverse speed
+reverse_speed = [-20, 0, 20, thrower_stop]
 
 #slow driving speeds
-forward_slow = [10, 0, -10]
-right_slow = [20, 0, -10]
-left_slow = [10, 0, -20]
+forward_slow = [10, 0, -10, thrower_stop]
+right_slow = [20, 0, -10, thrower_stop]
+left_slow = [10, 0, -20, thrower_stop]
 
 #fast driving speeds
-forward_fast = [50, 0, -50]
-right_fast = [60, 0, -40]
-left_fast = [40, 0, -60]
+forward_fast = [60, 0, -60, thrower_stop]
+right_fast = [80, 0, -50, thrower_stop]
+left_fast = [50, 0, -80, thrower_stop]
 
 #turn right speed
-right_turn = [20, 20, 20]
+right_turn = [25, 25, 25, thrower_stop]
 
-#tuen around ball
-around_right_slow = [0, 20, 0]
-around_right_fast = [0, 40, 0]
+#turn around ball
+around_w_basket_right_1_slow = [2, 7, 0, thrower_stop]
+around_w_basket_left_1_slow = [2, 7, 0, thrower_stop]
 
-around_left_slow = [0, -20, 0]
-around_left_fast = [0, -40, 0]
-
-compensate_left_slow = [-5, -5, -5]
-compensate_left_fast = [-15, -15, -15]
-compensate_right_slow = [5, 5, 5]
-compensate_right_fast = [15, 15, 15]
-
-sideways_left_slow = [8, -25, 8]
-sideways_left_fast = [10, -40, 10]
-sideways_right_slow = [-8, 25, -8]
-sideways_right_fast = [-10, 40, -10]
+around_w_basket_right_2_slow = [2, -7, 0, thrower_stop]
+around_w_basket_left_2_slow = [0, -7, -2, thrower_stop]
 
 
+around_w_basket_right_1 = [3, 19, 1, thrower_stop]
+around_w_basket_left_1 = [-1, 19, -3, thrower_stop]
+
+around_w_basket_right_2 = [3, -19, 1, thrower_stop]
+around_w_basket_left_2 = [-1, -19, -3, thrower_stop]
+
+
+around_wo_basket_right = [9, 50, 2, thrower_stop]
+around_wo_basket_left = [-2, 50, -9, thrower_stop]
+
+#around_wo_basket_right = [4, 19, 1, thrower_stop]
+#around_wo_basket_left = [-1, 19, -4, thrower_stop]
+
+
+mbt.start()
+
+for i in range(2):
+    ser.write(b"d:900\r\n")
+    time.sleep(1)
+    ser.write(b"d:1200\r\n")
+    time.sleep(1)
+
+#ser.write(b"fs:1\r\n")
 while True:
+    #time_start = time.time()
 
     if (cv2.waitKey(1) & 0xFF) == ord('q'):
         break
 
     frames = getFrames(pipeline)
+
     if frames:
 
-        draw_image, depth_frame, ball_img, basket_img = getImages(frames)
+        draw_image, depth_frame, ball_img, basket_img, gray_image = getImages(frames)
 
         basket_kp = getKeypoints(basket_img, basket_detector)
+        if basket_kp:
+            basket_x, basket_y = basket_kp[0].pt[0], basket_kp[0].pt[1]
+            basket_dist = depth_frame.get_distance(int(basket_x), int(basket_y))
+
+            """
+            center_dist = depth_frame.get_distance(424, 100)
+            distances = distances[1:] + [center_dist]
+            distance = np.average(distances)
+
+            if (distance < 0.5 and distance > 0.01) and basket_dist < 1:
+
+                have_ball = False
+                turnAround(speeds_queue)
+            """
 
         ball_kp = getKeypoints(ball_img, ball_detector)
         if ball_kp:
-            ball_x, ball_y, ball_size = findNearest(ball_kp)
+            ball_x, ball_y, ball_size = findNearest(ball_kp, gray_image)
 
         if have_ball:
 
-            if ball_kp and ball_y > 370:
+            if (ball_kp and ball_x > 0) and ball_y > 460:
+                reverse(speeds_queue, reverse_speed)
+
+            elif (ball_kp and ball_x > 0) and ball_y > 370:
 
                 if basket_kp:
-                    basket_x, basket_y = basket_kp[0].pt[0], basket_kp[0].pt[1]
-                    basket_dist = depth_frame.get_distance(int(basket_x), int(basket_y))
+                    if basket_dist < 1.5 and (abs(basket_x - 424) < 7 and abs(ball_x - 424) < 3):
+                            throw(speeds_queue, basket_dist, basket_x, ball_x)
+                            have_ball = False
 
-                    if abs(basket_x - 320) < 5 and abs(ball_x - 320) < 5:
-                        while not speeds_queue.empty():
-                            speeds_queue.get()
+                    elif basket_dist >= 1.5 and (abs(basket_x - 424) < 3 and abs(ball_x - 424) < 3):
+                            throw(speeds_queue, basket_dist, basket_x, ball_x)
+                            have_ball = False
 
-                        throw(throws_queue, speeds_queue, basket_dist)
-                        have_ball = False
-                        #print(basket_x)
-
-                    elif abs(basket_x - 320) < 80:
-                        turnAroundBall(speeds_queue, ball_x, basket_x, around_right_slow, around_left_slow, compensate_right_slow, compensate_left_slow, sideways_right_slow, sideways_left_slow)
+                    elif abs(basket_x - 424) < 10:
+                        rotateToBasket(speeds_queue, ball_x, basket_x, around_w_basket_right_1_slow, around_w_basket_left_1_slow, around_w_basket_right_2_slow, around_w_basket_left_2_slow)
 
                     else:
-                        turnAroundBall(speeds_queue, ball_x, basket_x, around_right_fast, around_left_fast, compensate_right_fast, compensate_left_fast, sideways_right_fast, sideways_left_fast)
+                        rotateToBasket(speeds_queue, ball_x, basket_x, around_w_basket_right_1, around_w_basket_left_1, around_w_basket_right_2, around_w_basket_left_2)
 
                 else:
-                    turnAroundBallRight(speeds_queue, ball_x, around_right_fast, compensate_right_fast, sideways_right_fast)
+                    rotateAroundBallRight(speeds_queue, ball_x, around_wo_basket_right, around_wo_basket_left)
 
             else:
                 have_ball = False
 
         else:
-            if ball_kp:
+            if ball_kp and ball_x > 0:
 
-                if ball_y > 380 and ball_size > 40:
+                if ball_y > 380:
                     have_ball = True
 
-                elif ball_y > 340:
+                elif ball_y > 330:
                     driveToBall(speeds_queue, ball_x, forward_slow, right_slow, left_slow)
 
                 else:
@@ -307,12 +373,14 @@ while True:
             else:
                 turnRight(speeds_queue, right_turn)
 
+
         draw_image = cv2.drawKeypoints(draw_image, ball_kp, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         draw_image = cv2.drawKeypoints(draw_image, basket_kp, np.array([]), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
         cv2.imshow("original", draw_image)
         cv2.imshow("ball", ball_img)
         cv2.imshow("basket", basket_img)
+        #cv2.imshow("gray", gray_image)
 
 cv2.destroyAllWindows()
 pipeline.stop()

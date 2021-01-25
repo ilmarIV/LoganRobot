@@ -151,7 +151,7 @@ def turnAroundBall(queue, ball_x, basket_x, right_turn, left_turn, compensate_ri
 def throw(throw_queue, speeds_queue, basket_dist):
     start = time.time()
     while time.time() - start <= 0.7:
-        throw_queue.put(250)
+        throw_queue.put(210)
         speeds_queue.put([25, 0, -25])
 
     while not throw_queue.empty():
