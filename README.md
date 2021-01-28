@@ -12,7 +12,9 @@ Windows - https://dev.intelrealsense.com/docs/installing-intel-realsense-sdk-20-
 Before running any python code, you must disalbe some features in the realsense-viewer application. 
 Under the RGB camera module, you must disable "enable auto_white_balance" and "auto_exposure_priority"
 
+You can also test camera settings via code ConfCam.py which saves them in cam_conf.txt. It shows the hsv image which you are going to threshold later.
 
+File test.py is for testign thrower speeds. You can give it speeds while code is running and write them down. This version is for test robot though.
 
 GetValues.py is the first file you must run. From there you can set the cameras thresholding values wich are saved into a values.txt file. Close the program with "q". Do not force close to program, otherwise the values are not saved. 
 Version3.py is the main file. All of the games logic is stored and executed in 1 single file. Upon running the program, it will ask for an input. 
